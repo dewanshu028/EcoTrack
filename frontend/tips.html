@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoTrack — Eco Tips</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="navbar-root"></div>
+
+<div class="container page">
+  <div class="page-header">
+    <h1 class="page-title">💡 Personalized Eco Tips</h1>
+    <p class="page-subtitle">Based on your recent activity, here's how to reduce your footprint</p>
+  </div>
+
+  <!-- Impact Summary -->
+  <div class="card mb-3" style="background:linear-gradient(135deg,var(--forest),var(--moss));color:white;border:none">
+    <div class="d-flex gap-2 align-center" style="flex-wrap:wrap">
+      <div style="flex:1">
+        <div style="font-size:0.85rem;opacity:0.8;margin-bottom:4px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em">Your potential annual savings</div>
+        <div style="font-family:var(--font-display);font-size:2.2rem;font-weight:700" id="total-saving">Calculating...</div>
+        <div style="opacity:0.8;font-size:0.9rem">kg CO₂e if you follow all recommendations</div>
+      </div>
+      <div style="text-align:right;opacity:0.8;font-size:0.85rem">
+        <div>🌳 Equivalent to planting</div>
+        <div style="font-size:1.5rem;font-weight:700;color:var(--sage)" id="trees-count">–</div>
+        <div>trees</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category Tabs -->
+  <div class="d-flex gap-1 mb-2" style="flex-wrap:wrap" id="tab-buttons">
+    <button onclick="filterRecs('all')" class="btn btn-primary btn-sm" data-tab="all">All Tips</button>
+    <button onclick="filterRecs('Transportation')" class="btn btn-outline btn-sm" data-tab="Transportation">🚗 Transport</button>
+    <button onclick="filterRecs('Energy')" class="btn btn-outline btn-sm" data-tab="Energy">⚡ Energy</button>
+    <button onclick="filterRecs('Diet')" class="btn btn-outline btn-sm" data-tab="Diet">🥗 Diet</button>
+    <button onclick="filterRecs('Waste')" class="btn btn-outline btn-sm" data-tab="Waste">♻️ Waste</button>
+  </div>
+
+  <!-- Recommendations Grid -->
+  <div class="grid grid-2" id="recs-grid">
+    <div class="text-center text-muted" style="padding:3rem;grid-column:1/-1">Loading recommendations...</div>
+  </div>
+
+  <!-- General Tips Section -->
+  <div class="mt-3">
+    <h2 style="color:var(--forest);margin-bottom:1.25rem">🌍 General Sustainability Guide</h2>
+    <div class="grid grid-3">
+      ${[
+        { icon: '🚆', title: 'Choose train over flight', desc: 'Train travel emits up to 80% less CO₂ per km than flying. For trips under 700km, trains are almost always greener.', tag: 'Transport' },
+        { icon: '🏠', title: 'Home insulation', desc: 'Proper insulation can cut heating/cooling energy by 30-40%, significantly reducing your home energy footprint.', tag: 'Energy' },
+        { icon: '🌱', title: 'Plant-based diet', desc: 'Shifting to a plant-based diet is one of the biggest individual actions for climate — saving up to 1.5 tonnes CO₂/year.', tag: 'Diet' },
+        { icon: '☀️', title: 'Solar water heating', desc: 'Solar water heaters can meet 60-80% of hot water needs in India, drastically cutting electricity use.', tag: 'Energy' },
+        { icon: '🛒', title: 'Buy second-hand', desc: 'Manufacturing new goods is energy-intensive. Buying second-hand extends product life and avoids new production emissions.', tag: 'Lifestyle' },
+        { icon: '🌊', title: 'Reduce water waste', desc: 'Water treatment uses significant energy. Shorter showers and fixing leaks reduces both water and carbon footprint.', tag: 'Lifestyle' }
+      ].map(tip => `
+        <div class="card">
+          <div style="font-size:2rem;margin-bottom:12px">${tip.icon}</div>
+          <div style="font-weight:600;color:var(--forest);margin-bottom:6px">${tip.title}</div>
+          <p style="font-size:0.85rem;color:var(--muted);line-height:1.6;margin-bottom:12px">${tip.desc}</p>
+          <span class="badge badge-green" style="font-size:0.72rem">${tip.tag}</span>
+        </div>
+      `).join('')}
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  if (!requireAuth()) { /* redirect */ }
+  document.getElementById('navbar-root').innerHTML = renderNavbar('tips');
+
+  let allRecs = [];
+
+  async function loadRecs() {
+    try {
+      const res = await api.get('/entries/recommendations');
+      allRecs = res.data;
+
+      const totalSaving = allRecs.reduce((sum, r) => sum + parseFloat(r.saving || 0), 0);
+      const annualSaving = totalSaving * 52; // weekly * 52
+      document.getElementById('total-saving').textContent = annualSaving.toFixed(0) + ' kg';
+      document.getElementById('trees-count').textContent = Math.round(annualSaving / 21); // 1 tree ~21kg/yr
+
+      renderRecs(allRecs);
+    } catch (err) {
+      showToast('Could not load recommendations', 'error');
+    }
+  }
+
+  function filterRecs(category) {
+    // Update tab buttons
+    document.querySelectorAll('[data-tab]').forEach(btn => {
+      btn.className = btn.dataset.tab === category ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+    });
+
+    const filtered = category === 'all' ? allRecs : allRecs.filter(r => r.category === category);
+    renderRecs(filtered);
+  }
+
+  function renderRecs(recs) {
+    const el = document.getElementById('recs-grid');
+    if (!recs.length) {
+      el.innerHTML = '<div class="text-center text-muted" style="padding:3rem;grid-column:1/-1">No tips for this category yet. Log more entries to get personalized recommendations!</div>';
+      return;
+    }
+
+    el.innerHTML = recs.map(r => `
+      <div class="card" style="border-left:4px solid var(--${r.impact === 'High' ? 'danger' : r.impact === 'Medium' ? 'warning' : 'leaf'})">
+        <div class="d-flex justify-between align-center mb-2">
+          <div style="font-size:1.8rem">${r.icon}</div>
+          <span class="badge ${r.impact === 'High' ? 'badge-red' : r.impact === 'Medium' ? 'badge-yellow' : 'badge-green'}">
+            ${r.impact} Impact
+          </span>
+        </div>
+        <div style="font-weight:600;color:var(--forest);font-size:1rem;margin-bottom:8px">${r.title}</div>
+        <p style="font-size:0.85rem;color:var(--muted);line-height:1.6;margin-bottom:12px">${r.description}</p>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="font-size:0.82rem;color:#16a34a;font-weight:600">💚 Save ~${r.saving} kg CO₂e/week</div>
+          <span class="badge badge-green" style="font-size:0.72rem">${r.category}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  loadRecs();
+</script>
+</body>
+</html>

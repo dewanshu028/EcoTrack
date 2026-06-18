@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoTrack — History</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div id="navbar-root"></div>
+
+<div class="container page">
+  <div class="page-header d-flex justify-between align-center">
+    <div>
+      <h1 class="page-title">📋 Emissions History</h1>
+      <p class="page-subtitle">Track your progress over time</p>
+    </div>
+    <a href="calculator.html" class="btn btn-primary">➕ New Entry</a>
+  </div>
+
+  <!-- Filters -->
+  <div class="card mb-3">
+    <div class="d-flex gap-2 align-center" style="flex-wrap:wrap">
+      <div class="form-group" style="margin:0;flex:1;min-width:140px">
+        <label class="form-label">From date</label>
+        <input type="date" id="filter-start" class="form-control">
+      </div>
+      <div class="form-group" style="margin:0;flex:1;min-width:140px">
+        <label class="form-label">To date</label>
+        <input type="date" id="filter-end" class="form-control">
+      </div>
+      <div style="margin-top:auto;padding-bottom:0">
+        <button onclick="loadEntries()" class="btn btn-primary">Filter</button>
+        <button onclick="clearFilters()" class="btn btn-outline" style="margin-left:8px">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mini chart -->
+  <div class="card mb-3">
+    <div class="card-header">
+      <span class="card-title">📈 Emissions Over Time</span>
+      <span id="entry-count" class="badge badge-green">Loading...</span>
+    </div>
+    <div style="height:200px">
+      <canvas id="history-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">All Entries</span>
+    </div>
+    <div class="table-wrapper" id="entries-table">
+      <div class="text-center text-muted" style="padding:3rem">
+        <div style="font-size:2rem;margin-bottom:8px">⏳</div>
+        Loading entries...
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<div id="delete-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;display:flex;align-items:center;justify-content:center">
+  <div class="card" style="max-width:400px;width:90%">
+    <h3 style="margin-bottom:1rem">Delete Entry?</h3>
+    <p class="text-muted" style="margin-bottom:1.5rem">This action cannot be undone.</p>
+    <div class="d-flex gap-2">
+      <button onclick="closeModal()" class="btn btn-outline" style="flex:1">Cancel</button>
+      <button onclick="confirmDelete()" class="btn btn-danger" style="flex:1">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  if (!requireAuth()) { /* redirect */ }
+  document.getElementById('navbar-root').innerHTML = renderNavbar('history');
+
+  let entries = [];
+  let deleteId = null;
+  let histChart = null;
+
+  async function loadEntries() {
+    const start = document.getElementById('filter-start').value;
+    const end = document.getElementById('filter-end').value;
+    let url = '/entries?limit=100';
+    if (start) url += `&startDate=${start}`;
+    if (end) url += `&endDate=${end}`;
+
+    try {
+      const res = await api.get(url);
+      entries = res.data;
+      document.getElementById('entry-count').textContent = `${entries.length} entries`;
+      renderTable(entries);
+      renderChart(entries);
+    } catch (err) {
+      showToast('Failed to load entries: ' + err.message, 'error');
+    }
+  }
+
+  function clearFilters() {
+    document.getElementById('filter-start').value = '';
+    document.getElementById('filter-end').value = '';
+    loadEntries();
+  }
+
+  function renderTable(entries) {
+    const el = document.getElementById('entries-table');
+    if (!entries.length) {
+      el.innerHTML = `
+        <div class="text-center" style="padding:3rem">
+          <div style="font-size:3rem;margin-bottom:1rem">🌱</div>
+          <p class="text-muted">No entries found.</p>
+          <a href="calculator.html" class="btn btn-primary btn-sm mt-1">Log your first entry</a>
+        </div>`;
+      return;
+    }
+
+    el.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>🚗 Transport</th>
+            <th>⚡ Energy</th>
+            <th>🥗 Lifestyle</th>
+            <th>Total</th>
+            <th>Level</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${entries.map(e => {
+            const level = getEmissionLevel(e.totals?.overall || 0);
+            return `
+              <tr>
+                <td>${formatDate(e.date)}</td>
+                <td>${(e.totals?.transportation || 0).toFixed(2)} kg</td>
+                <td>${(e.totals?.energy || 0).toFixed(2)} kg</td>
+                <td>${(e.totals?.lifestyle || 0).toFixed(2)} kg</td>
+                <td><strong>${(e.totals?.overall || 0).toFixed(2)} kg</strong></td>
+                <td><span class="badge ${level.badge}">${level.label}</span></td>
+                <td>
+                  <button onclick="openDeleteModal('${e._id}')" class="btn btn-sm btn-danger" style="padding:4px 10px;font-size:0.78rem">🗑 Delete</button>
+                </td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  function renderChart(entries) {
+    const sorted = [...entries].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const ctx = document.getElementById('history-chart').getContext('2d');
+    if (histChart) histChart.destroy();
+    histChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: sorted.map(e => formatDate(e.date)),
+        datasets: [{
+          label: 'Total CO₂e (kg)',
+          data: sorted.map(e => (e.totals?.overall || 0).toFixed(2)),
+          backgroundColor: sorted.map(e => {
+            const total = e.totals?.overall || 0;
+            return total < 5 ? '#74c69d' : total < 15 ? '#fcd34d' : '#f87171';
+          }),
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: '#d1e8dc' } },
+          x: { grid: { display: false }, ticks: { maxRotation: 45 } }
+        }
+      }
+    });
+  }
+
+  function openDeleteModal(id) {
+    deleteId = id;
+    document.getElementById('delete-modal').classList.remove('hidden');
+    document.getElementById('delete-modal').style.display = 'flex';
+  }
+
+  function closeModal() {
+    deleteId = null;
+    document.getElementById('delete-modal').style.display = 'none';
+  }
+
+  async function confirmDelete() {
+    if (!deleteId) return;
+    try {
+      await api.delete(`/entries/${deleteId}`);
+      showToast('Entry deleted', 'success');
+      closeModal();
+      loadEntries();
+    } catch (err) {
+      showToast('Delete failed: ' + err.message, 'error');
+    }
+  }
+
+  loadEntries();
+</script>
+</body>
+</html>

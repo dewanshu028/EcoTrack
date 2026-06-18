@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoTrack — Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div id="navbar-root"></div>
+
+<div class="container page">
+  <!-- Page Header -->
+  <div class="page-header d-flex justify-between align-center">
+    <div>
+      <h1 class="page-title" id="greeting">Good morning 👋</h1>
+      <p class="page-subtitle">Here's your carbon footprint summary</p>
+    </div>
+    <a href="calculator.html" class="btn btn-primary">
+      ➕ Log Today
+    </a>
+  </div>
+
+  <!-- Stat Cards -->
+  <div class="grid grid-4 mb-3" id="stat-cards">
+    <div class="stat-card">
+      <div class="skeleton" style="height:36px;width:80px;margin-bottom:8px"></div>
+      <div class="skeleton" style="height:14px;width:60px"></div>
+    </div>
+    <div class="stat-card">
+      <div class="skeleton" style="height:36px;width:80px;margin-bottom:8px"></div>
+      <div class="skeleton" style="height:14px;width:60px"></div>
+    </div>
+    <div class="stat-card">
+      <div class="skeleton" style="height:36px;width:80px;margin-bottom:8px"></div>
+      <div class="skeleton" style="height:14px;width:60px"></div>
+    </div>
+    <div class="stat-card">
+      <div class="skeleton" style="height:36px;width:80px;margin-bottom:8px"></div>
+      <div class="skeleton" style="height:14px;width:60px"></div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="grid grid-2 mb-3">
+    <!-- Monthly Trend -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📈 Monthly Emissions Trend</span>
+        <span class="badge badge-green">Last 6 months</span>
+      </div>
+      <div class="chart-container" style="height:240px">
+        <canvas id="trend-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Category Breakdown -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🎯 Emissions by Category</span>
+        <span class="badge badge-green">All time</span>
+      </div>
+      <div class="chart-container" style="height:240px;display:flex;align-items:center;justify-content:center">
+        <canvas id="category-chart" style="max-width:240px;max-height:240px"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Row -->
+  <div class="grid grid-2">
+    <!-- Recommendations -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">💡 Eco Recommendations</span>
+        <a href="tips.html" class="btn btn-outline btn-sm">View all</a>
+      </div>
+      <div id="recommendations-list">
+        <div class="text-center text-muted" style="padding:2rem">Loading recommendations...</div>
+      </div>
+    </div>
+
+    <!-- Recent Entries -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📋 Recent Entries</span>
+        <a href="history.html" class="btn btn-outline btn-sm">View all</a>
+      </div>
+      <div id="recent-entries">
+        <div class="text-center text-muted" style="padding:2rem">Loading entries...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  if (!requireAuth()) { /* redirect handled */ }
+
+  // Navbar
+  document.getElementById('navbar-root').innerHTML = renderNavbar('dashboard');
+
+  // Greeting
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const user = Auth.getUser();
+  document.getElementById('greeting').textContent = `${greet}, ${user?.name?.split(' ')[0] || ''} 👋`;
+
+  let trendChart, categoryChart;
+
+  async function loadDashboard() {
+    try {
+      const [statsRes, recsRes] = await Promise.all([
+        api.get('/entries/stats'),
+        api.get('/entries/recommendations')
+      ]);
+
+      renderStatCards(statsRes.data);
+      renderCharts(statsRes.data);
+      renderRecommendations(recsRes.data);
+      renderRecentEntries(statsRes.data.recentEntries);
+    } catch (err) {
+      showToast('Failed to load dashboard: ' + err.message, 'error');
+    }
+  }
+
+  function renderStatCards(data) {
+    const allTime = data.allTime || {};
+    const recent = data.recentEntries || [];
+    const todayEmission = recent.length > 0 ? recent[recent.length - 1]?.totals?.overall || 0 : 0;
+    const avgEmission = allTime.avgEmissions || 0;
+    const totalEmission = allTime.totalEmissions || 0;
+    const entryCount = allTime.entryCount || 0;
+
+    const level = getEmissionLevel(todayEmission);
+
+    document.getElementById('stat-cards').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-value">${todayEmission.toFixed(1)}</div>
+        <div class="stat-unit">kg CO₂e</div>
+        <div class="stat-label">Latest Entry</div>
+        <div class="emission-level ${level.class}" style="margin-top:8px;font-size:0.75rem;padding:3px 10px">
+          ${level.label} Emissions
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${avgEmission.toFixed(1)}</div>
+        <div class="stat-unit">kg CO₂e</div>
+        <div class="stat-label">Average per Entry</div>
+        <div class="stat-change ${avgEmission < 10 ? 'positive' : 'negative'}">
+          ${avgEmission < 10 ? '✅ Below avg' : '⚠️ Above avg'} (10 kg/day)
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${totalEmission.toFixed(0)}</div>
+        <div class="stat-unit">kg CO₂e</div>
+        <div class="stat-label">Total Tracked</div>
+        <div class="stat-change">${(totalEmission / 1000).toFixed(2)} tonnes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${entryCount}</div>
+        <div class="stat-unit">logs</div>
+        <div class="stat-label">Total Entries</div>
+        <div class="stat-change positive">${entryCount > 0 ? '🌱 Keep tracking!' : 'Start logging today'}</div>
+      </div>
+    `;
+  }
+
+  function renderCharts(data) {
+    // Monthly trend chart
+    const monthly = data.monthlyStats || [];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    const trendCtx = document.getElementById('trend-chart').getContext('2d');
+    if (trendChart) trendChart.destroy();
+    trendChart = new Chart(trendCtx, {
+      type: 'line',
+      data: {
+        labels: monthly.map(m => `${months[m._id.month - 1]} ${m._id.year}`),
+        datasets: [{
+          label: 'Total Emissions (kg CO₂e)',
+          data: monthly.map(m => m.totalEmissions.toFixed(2)),
+          borderColor: '#40916c',
+          backgroundColor: 'rgba(64,145,108,0.1)',
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: '#40916c',
+          pointRadius: 5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: '#d1e8dc' }, ticks: { font: { size: 11 } } },
+          x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+        }
+      }
+    });
+
+    // Category doughnut
+    const cat = data.categoryBreakdown || {};
+    const catCtx = document.getElementById('category-chart').getContext('2d');
+    if (categoryChart) categoryChart.destroy();
+    categoryChart = new Chart(catCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Transportation', 'Energy', 'Lifestyle'],
+        datasets: [{
+          data: [
+            (cat.transportation || 0).toFixed(2),
+            (cat.energy || 0).toFixed(2),
+            (cat.lifestyle || 0).toFixed(2)
+          ],
+          backgroundColor: ['#40916c', '#74c69d', '#b7e4c7'],
+          borderColor: '#ffffff',
+          borderWidth: 3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12 } }
+        },
+        cutout: '65%'
+      }
+    });
+  }
+
+  function renderRecommendations(recs) {
+    const el = document.getElementById('recommendations-list');
+    if (!recs || recs.length === 0) {
+      el.innerHTML = '<p class="text-muted text-center" style="padding:1rem">No recommendations yet. Log an entry first!</p>';
+      return;
+    }
+
+    el.innerHTML = recs.slice(0, 3).map(r => `
+      <div class="rec-card mb-1">
+        <div class="rec-icon">${r.icon}</div>
+        <div class="rec-content">
+          <div class="rec-title">${r.title}</div>
+          <div class="rec-desc">${r.description}</div>
+          <div class="rec-saving">💚 Save ~${r.saving} kg CO₂e</div>
+        </div>
+        <span class="badge ${r.impact === 'High' ? 'badge-red' : r.impact === 'Medium' ? 'badge-yellow' : 'badge-green'}" style="align-self:flex-start">${r.impact}</span>
+      </div>
+    `).join('');
+  }
+
+  function renderRecentEntries(entries) {
+    const el = document.getElementById('recent-entries');
+    if (!entries || entries.length === 0) {
+      el.innerHTML = `
+        <div class="text-center" style="padding:2rem">
+          <div style="font-size:2.5rem;margin-bottom:1rem">🌱</div>
+          <p class="text-muted">No entries yet.</p>
+          <a href="calculator.html" class="btn btn-primary btn-sm mt-1">Log your first entry</a>
+        </div>`;
+      return;
+    }
+
+    el.innerHTML = `
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Total</th>
+              <th>Level</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${entries.slice(0, 7).map(e => {
+              const level = getEmissionLevel(e.totals?.overall || 0);
+              return `
+                <tr>
+                  <td>${formatDate(e.date)}</td>
+                  <td><strong>${(e.totals?.overall || 0).toFixed(2)}</strong> kg</td>
+                  <td><span class="badge ${level.badge}">${level.label}</span></td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  loadDashboard();
+</script>
+</body>
+</html>

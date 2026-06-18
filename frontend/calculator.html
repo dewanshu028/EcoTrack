@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoTrack — Calculator</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="navbar-root"></div>
+
+<div class="container page">
+  <div class="page-header">
+    <h1 class="page-title">🧮 Carbon Footprint Calculator</h1>
+    <p class="page-subtitle">Log your daily activities to track emissions</p>
+  </div>
+
+  <div class="grid grid-2" style="align-items:start">
+    <!-- Calculator Form -->
+    <div>
+      <div id="alert-box"></div>
+      <form id="calc-form">
+
+        <!-- Transportation -->
+        <div class="card mb-2">
+          <div class="form-section-title">🚗 Transportation</div>
+          <div class="grid grid-2">
+            <div class="form-group">
+              <label class="form-label">Car (km)</label>
+              <div class="input-group">
+                <input type="number" id="car" class="form-control" placeholder="0" min="0" step="0.1" value="0">
+                <span class="input-addon">km</span>
+              </div>
+              <div class="form-text">Petrol/diesel car</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Public Transport (km)</label>
+              <div class="input-group">
+                <input type="number" id="publicTransport" class="form-control" placeholder="0" min="0" step="0.1" value="0">
+                <span class="input-addon">km</span>
+              </div>
+              <div class="form-text">Bus, metro, train</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Motorcycle (km)</label>
+              <div class="input-group">
+                <input type="number" id="motorcycle" class="form-control" placeholder="0" min="0" step="0.1" value="0">
+                <span class="input-addon">km</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Flight (km)</label>
+              <div class="input-group">
+                <input type="number" id="flight" class="form-control" placeholder="0" min="0" step="1" value="0">
+                <span class="input-addon">km</span>
+              </div>
+              <div class="form-text">One-way distance</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Energy -->
+        <div class="card mb-2">
+          <div class="form-section-title">⚡ Home Energy</div>
+          <div class="grid grid-2">
+            <div class="form-group">
+              <label class="form-label">Electricity used</label>
+              <div class="input-group">
+                <input type="number" id="electricity" class="form-control" placeholder="0" min="0" step="0.1" value="0">
+                <span class="input-addon">kWh</span>
+              </div>
+              <div class="form-text">From your meter/bill</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Natural Gas</label>
+              <div class="input-group">
+                <input type="number" id="naturalGas" class="form-control" placeholder="0" min="0" step="0.1" value="0">
+                <span class="input-addon">m³</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">LPG / Cooking Gas</label>
+              <div class="input-group">
+                <input type="number" id="lpg" class="form-control" placeholder="0" min="0" step="0.1" value="0">
+                <span class="input-addon">litres</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lifestyle -->
+        <div class="card mb-2">
+          <div class="form-section-title">🥗 Lifestyle & Waste</div>
+          <div class="grid grid-2">
+            <div class="form-group">
+              <label class="form-label">Meat meals</label>
+              <div class="input-group">
+                <input type="number" id="meatMeals" class="form-control" placeholder="0" min="0" step="1" value="0">
+                <span class="input-addon">meals</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Vegetarian meals</label>
+              <div class="input-group">
+                <input type="number" id="vegetarianMeals" class="form-control" placeholder="0" min="0" step="1" value="0">
+                <span class="input-addon">meals</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Waste generated</label>
+              <div class="input-group">
+                <input type="number" id="wasteKg" class="form-control" placeholder="0" min="0" step="0.1" value="0">
+                <span class="input-addon">kg</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="card mb-2">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Notes (optional)</label>
+            <textarea id="notes" class="form-control" rows="2" placeholder="Any context about today's activities..."></textarea>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="button" onclick="calculatePreview()" class="btn btn-outline" style="flex:1">
+            👁 Preview
+          </button>
+          <button type="submit" class="btn btn-primary" style="flex:2" id="submit-btn">
+            💾 Save Entry
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Live Preview Panel -->
+    <div>
+      <div class="card" id="preview-card" style="position:sticky;top:80px">
+        <div class="card-header">
+          <span class="card-title">📊 Estimated Emissions</span>
+          <span id="preview-date" class="text-muted" style="font-size:0.8rem"></span>
+        </div>
+
+        <div class="co2-gauge">
+          <div class="co2-number" id="preview-total">0.0</div>
+          <div class="co2-unit">kg CO₂e</div>
+          <div id="preview-level" class="emission-level level-low" style="margin:12px auto;display:inline-flex">
+            🌿 Low Emissions
+          </div>
+        </div>
+
+        <!-- Breakdown bars -->
+        <div style="margin-top:1rem">
+          <div style="margin-bottom:1rem">
+            <div class="d-flex justify-between mb-1">
+              <span style="font-size:0.85rem;font-weight:500">🚗 Transport</span>
+              <span style="font-size:0.85rem" id="prev-transport">0.0 kg</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="bar-transport" style="width:0%"></div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:1rem">
+            <div class="d-flex justify-between mb-1">
+              <span style="font-size:0.85rem;font-weight:500">⚡ Energy</span>
+              <span style="font-size:0.85rem" id="prev-energy">0.0 kg</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="bar-energy" style="width:0%;background:linear-gradient(90deg,#74c69d,#40916c)"></div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:1rem">
+            <div class="d-flex justify-between mb-1">
+              <span style="font-size:0.85rem;font-weight:500">🥗 Lifestyle</span>
+              <span style="font-size:0.85rem" id="prev-lifestyle">0.0 kg</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="bar-lifestyle" style="width:0%;background:linear-gradient(90deg,#b7e4c7,#74c69d)"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Context -->
+        <div style="background:var(--cream);border-radius:var(--radius);padding:1rem;margin-top:1rem">
+          <div style="font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:8px">For context</div>
+          <div style="font-size:0.85rem;color:var(--slate);line-height:1.6">
+            🌍 World avg: <strong>~12 kg/day</strong><br>
+            🇮🇳 India avg: <strong>~5 kg/day</strong><br>
+            🎯 Paris target: <strong>&lt;4 kg/day</strong>
+          </div>
+        </div>
+
+        <div style="margin-top:1rem;font-size:0.78rem;color:var(--muted);text-align:center">
+          Factors: India grid (0.82 kg/kWh), IPCC transport data
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  if (!requireAuth()) { /* redirect */ }
+  document.getElementById('navbar-root').innerHTML = renderNavbar('calculator');
+  document.getElementById('preview-date').textContent = new Date().toLocaleDateString('en-IN', { dateStyle: 'long' });
+
+  // Emission factors
+  const EF = {
+    car: 0.21, publicTransport: 0.089, flight: 0.255, motorcycle: 0.113,
+    electricity: 0.82, naturalGas: 2.0, lpg: 1.51,
+    meatMeal: 3.3, vegetarianMeal: 0.5, waste: 0.5
+  };
+
+  function getValues() {
+    return {
+      car: parseFloat(document.getElementById('car').value) || 0,
+      publicTransport: parseFloat(document.getElementById('publicTransport').value) || 0,
+      flight: parseFloat(document.getElementById('flight').value) || 0,
+      motorcycle: parseFloat(document.getElementById('motorcycle').value) || 0,
+      electricity: parseFloat(document.getElementById('electricity').value) || 0,
+      naturalGas: parseFloat(document.getElementById('naturalGas').value) || 0,
+      lpg: parseFloat(document.getElementById('lpg').value) || 0,
+      meatMeals: parseInt(document.getElementById('meatMeals').value) || 0,
+      vegetarianMeals: parseInt(document.getElementById('vegetarianMeals').value) || 0,
+      wasteKg: parseFloat(document.getElementById('wasteKg').value) || 0
+    };
+  }
+
+  function calculatePreview() {
+    const v = getValues();
+
+    const transport = (v.car * EF.car) + (v.publicTransport * EF.publicTransport) +
+      (v.flight * EF.flight) + (v.motorcycle * EF.motorcycle);
+    const energy = (v.electricity * EF.electricity) + (v.naturalGas * EF.naturalGas) + (v.lpg * EF.lpg);
+    const lifestyle = (v.meatMeals * EF.meatMeal) + (v.vegetarianMeals * EF.vegetarianMeal) + (v.wasteKg * EF.waste);
+    const total = transport + energy + lifestyle;
+
+    document.getElementById('preview-total').textContent = total.toFixed(2);
+    document.getElementById('prev-transport').textContent = transport.toFixed(2) + ' kg';
+    document.getElementById('prev-energy').textContent = energy.toFixed(2) + ' kg';
+    document.getElementById('prev-lifestyle').textContent = lifestyle.toFixed(2) + ' kg';
+
+    const maxVal = Math.max(transport, energy, lifestyle, 1);
+    document.getElementById('bar-transport').style.width = Math.min((transport / maxVal) * 100, 100) + '%';
+    document.getElementById('bar-energy').style.width = Math.min((energy / maxVal) * 100, 100) + '%';
+    document.getElementById('bar-lifestyle').style.width = Math.min((lifestyle / maxVal) * 100, 100) + '%';
+
+    const level = getEmissionLevel(total);
+    const levelEl = document.getElementById('preview-level');
+    levelEl.className = `emission-level ${level.class}`;
+    const emojis = { low: '🌿', medium: '⚠️', high: '🔴' };
+    levelEl.textContent = `${level.label} Emissions`;
+  }
+
+  // Live preview on input
+  document.querySelectorAll('input[type="number"]').forEach(el => {
+    el.addEventListener('input', calculatePreview);
+  });
+
+  document.getElementById('calc-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('submit-btn');
+    const alertBox = document.getElementById('alert-box');
+    const v = getValues();
+
+    btn.innerHTML = '<span class="spinner"></span> Saving...';
+    btn.disabled = true;
+    alertBox.innerHTML = '';
+
+    try {
+      await api.post('/entries', {
+        transportation: {
+          car: v.car,
+          publicTransport: v.publicTransport,
+          flight: v.flight,
+          motorcycle: v.motorcycle
+        },
+        energy: {
+          electricity: v.electricity,
+          naturalGas: v.naturalGas,
+          lpg: v.lpg
+        },
+        lifestyle: {
+          meatMeals: v.meatMeals,
+          vegetarianMeals: v.vegetarianMeals,
+          wasteKg: v.wasteKg
+        },
+        notes: document.getElementById('notes').value
+      });
+
+      showToast('Entry saved successfully! 🌱', 'success');
+      alertBox.innerHTML = `<div class="alert alert-success">✅ Entry saved! <a href="dashboard.html">View dashboard →</a></div>`;
+
+      // Reset form
+      document.getElementById('calc-form').reset();
+      calculatePreview();
+    } catch (err) {
+      alertBox.innerHTML = `<div class="alert alert-danger">❌ ${err.message}</div>`;
+    } finally {
+      btn.innerHTML = '💾 Save Entry';
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
